@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>خريطة البحر الأحمر - 3 مستويات</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; }
+        #map { width: 100%; height: 100vh; }
+        .info-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.85);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 1000;
+            min-width: 220px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .info-panel h3 { margin-bottom: 10px; color: #4FC3F7; font-size: 16px; }
+        .level-indicator {
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin: 5px 0;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        .level-active { background: #4CAF50; color: white; }
+        .level-inactive { background: #333; opacity: 0.5; }
+        .zoom-info { margin-top: 12px; font-size: 12px; color: #aaa; }
+        .marker-info { 
+            margin-top: 12px; 
+            padding-top: 12px; 
+            border-top: 1px solid #444;
+            font-size: 12px; 
+            color: #FFD54F; 
+        }
+        .island-marker {
+            background: #FF5722;
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+        }
+        .leaflet-popup-content-wrapper {
+            background: rgba(0,0,0,0.85);
+            color: white;
+            border-radius: 8px;
+        }
+        .leaflet-popup-content {
+            margin: 10px 15px;
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+        }
+        .leaflet-popup-tip {
+            background: rgba(0,0,0,0.85);
+        }
+        .popup-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #4FC3F7;
+            margin-bottom: 5px;
+        }
+        .popup-coords {
+            font-size: 11px;
+            color: #aaa;
+            direction: ltr;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="info-panel">
+        <h3>🗺️ خريطة البحر الأحمر</h3>
+        <div id="level-overview" class="level-indicator level-inactive">🌍 المستوى العام (6-9)</div>
+        <div id="level-medium" class="level-indicator level-inactive">🗺️ المستوى المتوسط (10-13)</div>
+        <div id="level-detail" class="level-indicator level-inactive">📍 المستوى التفصيلي (14-18)</div>
+        <div class="zoom-info">الزووم الحالي: <span id="current-zoom">10</span></div>
+        <div class="marker-info">🏝️ الجزر: <span id="marker-count">0</span> نقطة</div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let config;
+        let map;
+        let layerGroups = {
+            overview: L.layerGroup(),
+            medium: L.layerGroup(),
+            detail: L.layerGroup()
+        };
+        let markersLayer = L.layerGroup();
+
+        async function init() {
+            const response = await fetch('leaflet_config.json');
+            config = await response.json();
+            
+            map = L.map('map', {
+                center: config.center,
+                zoom: config.defaultZoom,
+                minZoom: 6,
+                maxZoom: 18
+            });
+
+            // Dark base layer
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© OpenStreetMap © CARTO',
+                subdomains: 'abcd',
+                maxZoom: 20,
+                opacity: 0.3
+            }).addTo(map);
+
+            // Add tiles for each level
+            Object.keys(config.levels).forEach(levelKey => {
+                const level = config.levels[levelKey];
+                level.tiles.forEach(tile => {
+                    const overlay = L.imageOverlay(tile.image, tile.bounds, {
+                        opacity: 1,
+                        interactive: false
+                    });
+                    layerGroups[levelKey].addLayer(overlay);
+                });
+            });
+
+            // Add island markers (show on ALL zoom levels)
+            if (config.markers) {
+                const islandIcon = L.divIcon({
+                    className: 'island-marker',
+                    iconSize: [12, 12],
+                    iconAnchor: [6, 6],
+                    popupAnchor: [0, -8]
+                });
+
+                config.markers.forEach(marker => {
+                    const m = L.marker([marker.lat, marker.lon], { icon: islandIcon })
+                        .bindPopup(`
+                            <div class="popup-title">🏝️ ${marker.name}</div>
+                            <div class="popup-coords">${marker.lat.toFixed(5)}, ${marker.lon.toFixed(5)}</div>
+                        `);
+                    markersLayer.addLayer(m);
+                });
+
+                markersLayer.addTo(map);
+                document.getElementById('marker-count').textContent = config.markers.length;
+            }
+
+            // Update visible layers based on zoom
+            function updateLayers() {
+                const zoom = map.getZoom();
+                document.getElementById('current-zoom').textContent = zoom;
+
+                Object.keys(config.levels).forEach(levelKey => {
+                    const level = config.levels[levelKey];
+                    const indicator = document.getElementById('level-' + levelKey);
+                    
+                    if (zoom >= level.minZoom && zoom <= level.maxZoom) {
+                        if (!map.hasLayer(layerGroups[levelKey])) {
+                            layerGroups[levelKey].addTo(map);
+                        }
+                        indicator.className = 'level-indicator level-active';
+                    } else {
+                        if (map.hasLayer(layerGroups[levelKey])) {
+                            map.removeLayer(layerGroups[levelKey]);
+                        }
+                        indicator.className = 'level-indicator level-inactive';
+                    }
+                });
+            }
+
+            map.on('zoomend', updateLayers);
+            updateLayers();
+            map.fitBounds(config.bounds);
+        }
+
+        init();
+    </script>
+</body>
+</html>
