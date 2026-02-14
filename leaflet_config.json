@@ -19,7 +19,7 @@
     "overview": {
       "name": "المستوى العام",
       "minZoom": 6,
-      "maxZoom": 9,
+      "maxZoom": 8,
       "tiles": [
         {
           "name": "0001",
@@ -67,8 +67,8 @@
     },
     "medium": {
       "name": "المستوى المتوسط",
-      "minZoom": 10,
-      "maxZoom": 13,
+      "minZoom": 9,
+      "maxZoom": 11,
       "tiles": [
         {
           "name": "2_40",
@@ -620,7 +620,7 @@
     },
     "detail": {
       "name": "المستوى التفصيلي",
-      "minZoom": 14,
+      "minZoom": 12,
       "maxZoom": 18,
       "tiles": [
         {
